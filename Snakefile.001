@@ -81,7 +81,7 @@ rule annotate_snps:
         cleaned_vcf="030.vcf/cleaned_snps.vcf"
     output:
         annotated_vcf="030.vcf/annotated_snps.vcf"
-    shell:
+    shell: 
         """
         java -Xmx4096m -jar {SNPEFF_JAR} eff GRCh38.99 -dataDir /staging/leuven/stg_00079/teaching/snpeff_db {input.cleaned_vcf} > {output.annotated_vcf}
         """
