@@ -1,0 +1,75 @@
+import os
+import glob
+import re
+
+sample_names, =glob_wildcards("000.fastq/{name}.fastq")
+no_oriet, = glob_wildcards("000.fastq/{name}_T.fastq")
+HG19="/staging/leuven/stg_00079/teaching/hg19_9/chr9.fa"
+
+rule all:
+    input:
+        fastqc=expand("010.fastqc/{name}_fastqc.html", name=sample_names),
+        vcf="030.vcf/cleaned_snps.vcf"
+
+rule fastqc:
+    input:
+        fq="000.fastq/{name}.fastq"
+    output:
+        zip="010.fastqc/{name}_fastqc.zip",
+        html="010.fastqc/{name}_fastqc.html"
+    
+    shell:
+        """
+        echo "Input: {input.fq} "
+        fastqc -o 010.fastqc {input.fq}
+        """
+
+rule allign:
+    input:
+        fq="000.fastq/{name}.fastq"
+    output:
+        bam="020.bam/{name}.bam"
+    shell:
+        """
+        echo "Input: {input.fq} "
+        echo "Output: {output.bam}"
+        echo "reference: {HG19} "
+        bwa mem {HG19} {input.fq} | samtools sort - > {output.bam}
+        """
+
+rule indici:
+    input:
+        bam="020.bam/{name}.bam"
+    output:
+        bai="020.bam/{name}.bam.bai"
+
+    shell:
+        """
+        samtools index {input.bam}
+        """
+
+rule call_snp:
+    input:
+        N_bam=expand("020.bam/{name}_N.bam", name=no_oriet),
+        T_bam=expand("020.bam/{name}_T.bam", name=no_oriet)
+    output:
+        vcf="030.vcf/raw_snps.vcf"
+    shell:
+        """
+        bcftools mpileup -Ou -f {HG19} {input.N_bam} {input.T_bam} | bcftools call -mv -Ov -o {output.vcf}   
+        """
+        
+rule filter_snps:
+    input:
+        vcf="030.vcf/raw_snps.vcf"
+    output:
+        cleaned_vcf="030.vcf/cleaned_snps.vcf"
+    shell:
+        """
+        cat {input.vcf} \
+            | vt decompose - \
+            | vt normalize -n -r {HG19} - \
+            | vt uniq - \
+            | vt view -f "QUAL>20" -h - \
+            > {output.cleaned_vcf}
+        """ 
